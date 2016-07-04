@@ -12,9 +12,6 @@
     - name: user hadoopadm
       user: name=hadoopadm 
       
-    - name: user gwhit
-      user: name=gwhit 
-
     - name: hadoopadm .ssh
       file: path=/home/hadoopadm/.ssh state=directory mode=0755 owner=hadoopadm group=hadoopadm
 
@@ -207,21 +204,21 @@
       with_items:
         - /dev/xvdb
         - /dev/xvdc
-        - /dev/xvdd
+
 
     - name: mount points hadoopXX
       file: path={{ item }} state=directory mode=0775 owner=root group=root
       with_items:
         - /hadoop00
         - /hadoop01
-        - /hadoop02
+  
 
     - name: mount local filesystems
       mount: name={{ item.mp }} src={{ item.dev }} fstype=ext4 state=mounted opts=nofail
       with_items:
         - { mp: '/hadoop00', dev: '/dev/xvdb' }
         - { mp: '/hadoop01', dev: '/dev/xvdc' }
-        - { mp: '/hadoop02', dev: '/dev/xvdd' }
+
 
     - name: tunefs 
       command: tune2fs -m 1 {{ item }}
@@ -229,7 +226,6 @@
       with_items:
         - '/dev/xvdb'
         - '/dev/xvdc'
-        - '/dev/xvdd'
 
       
 - hosts: alledge  
@@ -244,18 +240,6 @@
   
     - name: ksh
       yum: name=ksh state=present
-
-    - name: filesystems /dev/xvdb
-      filesystem: fstype=ext4 dev=/dev/xvdb
-
-    - name: mount point /hadoop00
-      file: path=/hadoop00 state=directory mode=0775 owner=root group=root
-
-    - name: mount filesystem /hadoop00 
-      mount: name=/hadoop00 src=/dev/xvdb fstype=auto state=mounted opts=nofail
-
-    - name: filesystems /dev/xvdb
-      filesystem: fstype=ext4 dev=/dev/xvdb
 
     - name: group pocappid
       user: name=pocappid 
