@@ -1,0 +1,322 @@
+---
+- hosts: all 
+  name: All Nodes
+  remote_user: ec2-user
+  become: yes                 # sudo to root
+
+  vars:
+    myrepo:  http://jump.hadoop.poc.local/repo 
+
+  tasks:
+
+    - name: user hadoopadm
+      user: name=hadoopadm 
+      
+    - name: user gwhit
+      user: name=gwhit 
+
+    - name: hadoopadm .ssh
+      file: path=/home/hadoopadm/.ssh state=directory mode=0755 owner=hadoopadm group=hadoopadm
+
+    - name: hadoopadm .bash_profile
+      get_url: url={{myrepo}}/hadoopadm_bash_profile dest=/home/hadoopadm/.bash_profile force=yes mode=644 owner=hadoopadm group=hadoopadm
+
+    - name: aws config dir
+      file: path=/root/.aws state=directory mode=0775 owner=root group=root
+
+    - name: aws config
+      get_url: url={{myrepo}}/config dest=/root/.aws/config force=yes mode=600 owner=root group=root
+      
+    - name: aws credentials
+      get_url: url={{myrepo}}/credentials dest=/root/.aws/credentials force=yes mode=600 owner=root group=root
+
+    - name: sudoers
+      get_url: url={{myrepo}}/sudoers dest=/etc/sudoers force=yes mode=440 owner=root group=root
+
+    - name: hadoopadm authorized_keys
+      get_url: url={{myrepo}}/hadoopadm_auth_keys dest=/home/hadoopadm/.ssh/authorized_keys force=yes mode=644
+      
+    - name: resolv.conf
+      get_url: url={{myrepo}}/resolv.conf dest=/etc/resolv.conf force=yes
+
+    - name: hostname
+      hostname: name={{ inventory_hostname }}
+
+    - name: yum clean all
+      command: yum clean all
+      changed_when: false
+
+    - name: epel 
+      yum: name={{myrepo}}/epel-release-7-6.noarch.rpm state=present
+
+    - name: bind-utils 
+      yum: name=bind-utils state=present
+
+    - name: wget
+      yum: name=wget state=present
+
+    - name: Java
+      yum: name={{myrepo}}/jdk-8u60-linux-x64.rpm state=present
+
+    - name: bzip2 
+      yum: name=bzip2 state=present
+
+    - name: bzip2 devel 
+      yum: name=bzip2-devel state=present
+    
+    - name: freetype devel 
+      yum: name=freetype-devel state=present
+    
+    - name: libgfortran 
+      yum: name=libgfortran state=present
+    
+    - name: ruby 
+      yum: name=libselinux-ruby state=present
+    
+    - name: openssl devel
+      yum: name=openssl-devel state=present
+    
+    - name: php
+      yum: name=php state=present
+      
+    - name: traceroute 
+      yum: name=traceroute state=present
+
+    - name: python 
+      yum: name=python state=present
+
+    - name: python-pip
+      yum: name=python-pip state=present
+
+    - name: aws cli 
+      pip: name=awscli 
+
+    - name: ganglia 
+      yum: name=ganglia state=present
+      
+    - name: ganglia-gmond 
+      yum: name=ganglia-gmond state=present
+    
+    - name: disable SE Linux
+      selinux: state=disabled 
+
+    - name: Disable Transparent Huge Pages
+      command: echo never > /sys/kernel/mm/transparent_hugepage/defrag
+      changed_when: false
+
+    - name: rc.local
+      get_url: url={{myrepo}}/rc.local dest=/etc/rc.local force=yes
+
+    - name: vm.swappiness = 0
+      sysctl: name=vm.swappiness value=0 state=present
+
+    - name:  vm.overcommit_memory = 1
+      sysctl: name=vm.overcommit_memory value=1 state=present
+      
+    - name: apply systemctl settings
+      command: sysctl -p
+
+    - name: Turn off swap
+      command: swapoff -a
+      changed_when: false
+
+    - name: Turn off firewall 
+      command: systemctl mask firewalld
+      changed_when: false
+
+    - name: system limits
+      get_url: url={{myrepo}}/20-nproc.conf dest=/etc/security/limits.d/20-nproc.conf force=yes
+
+    - name: cloudera repo in yum.repos.d 
+      get_url: url={{myrepo}}/cloudera-manager.repo dest=/etc/yum.repos.d/cloudera-manager.repo force=yes mode=644
+      
+    - name: resolv.conf
+      get_url: url={{myrepo}}/resolv.conf dest=/etc/resolv.conf force=yes
+
+    - name: yum cloudera-manager-agent
+      yum: name=cloudera-manager-agent.x86_64 state=present
+
+    - name: started - cloudera-scm-agent
+      service: name=cloudera-scm-agent enabled=no
+
+    - name: mysql-connector-java
+      yum: name=mysql-connector-java state=present
+      
+    - name: Ganglia agent config
+      get_url: url={{myrepo}}/gmond.conf dest=/etc/ganglia/gmond.conf force=yes
+      
+    - name: ganglia gmond
+      service: name=gmond enabled=no 
+    
+    #- name: yum - update all cloudera 
+    #  yum: name=* enablerepo=cloudera-manager state=latest
+      
+  
+
+- hosts: allmaster  
+  name: Master Nodes
+  remote_user: ec2-user
+  become: yes                 # sudo to root
+
+  vars:
+    myrepo:  http://jump.hadoop.poc.local/repo/ 
+
+  tasks:
+
+    - name: filesystems /dev/xvdb
+      filesystem: fstype=ext4 dev=/dev/xvdb
+
+    - name: mount point /hadoop00
+      file: path=/hadoop00 state=directory mode=0775 owner=root group=root
+
+    - name: mount filesystem /hadoop00
+      mount: name=/hadoop00 src=/dev/xvdb fstype=auto state=mounted opts=nofail
+
+- hosts: mysqldb
+  name: mySQL Database Node
+  remote_user: ec2-user
+  become: yes                 # sudo to root
+
+  vars:
+    myrepo:  http://jump.hadoop.poc.local/repo/ 
+
+  tasks:
+
+    - name: mysql repo config 
+      yum: name={{myrepo}}/mysql57-community-release-el7-8.noarch.rpm state=present
+
+    - name: mysql
+      yum: name=mysql-community-server state=present
+
+    - name: mysql-connector-java
+      yum: name=mysql-connector-java state=present
+      
+    #- name: mysql enabled
+    #  service: name=mysqld enabled=yes state=started
+
+
+- hosts: alldn 
+  name: Data Nodes
+  remote_user: ec2-user
+  become: yes                 # sudo to root
+
+  tasks:
+  
+    - name: local filesystems
+      filesystem: fstype=ext4 dev={{ item }}
+      with_items:
+        - /dev/xvdb
+        - /dev/xvdc
+        - /dev/xvdd
+
+    - name: mount points hadoopXX
+      file: path={{ item }} state=directory mode=0775 owner=root group=root
+      with_items:
+        - /hadoop00
+        - /hadoop01
+        - /hadoop02
+
+    - name: mount local filesystems
+      mount: name={{ item.mp }} src={{ item.dev }} fstype=ext4 state=mounted opts=nofail
+      with_items:
+        - { mp: '/hadoop00', dev: '/dev/xvdb' }
+        - { mp: '/hadoop01', dev: '/dev/xvdc' }
+        - { mp: '/hadoop02', dev: '/dev/xvdd' }
+
+    - name: tunefs 
+      command: tune2fs -m 1 {{ item }}
+      changed_when: false
+      with_items:
+        - '/dev/xvdb'
+        - '/dev/xvdc'
+        - '/dev/xvdd'
+
+      
+- hosts: alledge  
+  name: Edge Nodes
+  remote_user: ec2-user
+  become: yes                 # sudo to root
+
+  vars:
+    myrepo:  http://jump.hadoop.poc.local/repo/ 
+
+  tasks:
+  
+    - name: ksh
+      yum: name=ksh state=present
+
+    - name: filesystems /dev/xvdb
+      filesystem: fstype=ext4 dev=/dev/xvdb
+
+    - name: mount point /hadoop00
+      file: path=/hadoop00 state=directory mode=0775 owner=root group=root
+
+    - name: mount filesystem /hadoop00 
+      mount: name=/hadoop00 src=/dev/xvdb fstype=auto state=mounted opts=nofail
+
+    - name: filesystems /dev/xvdb
+      filesystem: fstype=ext4 dev=/dev/xvdb
+
+    - name: group pocappid
+      user: name=pocappid 
+
+    - name: user pocappid
+      user: name=pocappid group=pocappid home=/home/pocappid
+      
+    - name: hadoopadm .bash_profile
+      get_url: url={{myrepo}}/pocappid_bash_profile dest=/home/pocappid/.bash_profile force=yes mode=644 owner=pocappid group=pocappid
+    
+    - name: rbutils source
+      unarchive: src={{myrepo}}/rbutils-src-0.13.tar.gz dest=/usr/share/java/ copy=no #copy=no is required to fetch from https, otherwise defaults to playbook dir
+      
+    - name: rbutils bin
+      unarchive: src={{myrepo}}/rbutils-bin-0.13.tar.gz dest=/usr/share/java/ copy=no #copy=no is required to fetch from https, otherwise defaults to playbook dir
+  
+      
+  
+- hosts: cm
+  name: Cloudera Manager Node
+  remote_user: ec2-user
+  become: yes                 # sudo to root
+
+  vars:
+    myrepo:  http://jump.hadoop.poc.local/repo/ 
+
+  tasks:
+
+    - name: Apache http server
+      yum: name=httpd state=present
+      
+    - name: httpd service
+      service: name=httpd enabled=yes state=running
+
+    - name: cloudera-manager-daemons
+      yum: name=cloudera-manager-daemons.x86_64 state=present 
+
+    - name: cloudera-manager-server
+      yum: name=cloudera-manager-server.x86_64 state=present
+
+    #- name: cloudera-manager-server-db-2
+    #  yum: name=cloudera-manager-server-db-2.x86_64 state=present
+
+    - name: cloudera-scm-server 
+      service: name=cloudera-scm-server enabled=no 
+    
+    - name: ganglia-gmetad
+      yum:  name=ganglia-gmetad state=present
+      
+    - name: php bc-math
+      yum: name={{myrepo}}/php-bcmath-5.4.16-36.1.el7_2.1.x86_64.rpm
+      
+    - name: ganglia-web
+      yum:  name=ganglia-web state=present
+      
+    - name: Ganglia agent config
+      get_url: url={{myrepo}}/gmetad.conf dest=/etc/ganglia/gmetad.conf force=yes
+      
+    - name: ganglia gmetad
+      service: name=gmetad enabled=yes state=started 
+
+...
+Status API Training Shop Blog About
+© 2016 GitHub, Inc. Terms Privacy Security Contact Help
